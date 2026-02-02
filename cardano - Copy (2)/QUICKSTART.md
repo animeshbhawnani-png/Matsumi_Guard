@@ -23,6 +23,53 @@
 
 ---
 
+### Method 1a: Vercel + Render (Alternative)
+
+#### Step 1: Deploy Backend to Render
+1. Go to [Render](https://render.com)
+2. Click "New +" → "Web Service"
+3. Connect your GitHub repository
+4. Render will auto-detect Python
+5. Add environment variable: `BLOCKFROST_API_KEY=your_key`
+6. Deploy (copy your backend URL)
+
+#### Step 2: Deploy Frontend to Vercel
+(Same as Method 1, Step 2 above)
+
+---
+
+### Method 1b: Vercel + Fly.io (Alternative)
+
+#### Step 1: Deploy Backend to Fly.io
+1. Install Fly CLI: `curl -L https://fly.io/install.sh | sh`
+2. Login: `flyctl auth login`
+3. Deploy: `flyctl launch` (in project root)
+4. Set secrets: `flyctl secrets set BLOCKFROST_API_KEY=your_key`
+5. Deploy: `flyctl deploy`
+6. Get URL: `flyctl open` (shows your backend URL)
+
+#### Step 2: Deploy Frontend to Vercel
+(Same as Method 1, Step 2 above)
+
+---
+
+### Method 1c: Netlify + Render (Full Netlify Stack)
+
+#### Step 1: Deploy Backend to Render
+(See Method 1a, Step 1 above)
+
+#### Step 2: Deploy Frontend to Netlify
+1. Go to [Netlify](https://netlify.com)
+2. Click "Add new site" → "Import an existing project"
+3. Connect your GitHub repository
+4. Select `frontend` folder as base directory
+5. Build command: `npm run build`
+6. Publish directory: `.next`
+7. Add environment: `NEXT_PUBLIC_API_URL=<render-backend-url>`
+8. Deploy
+
+---
+
 ### Method 2: Docker Compose on Any VPS
 
 ```bash
@@ -51,25 +98,7 @@ Access at: `http://your-server-ip:3000`
 
 ### Method 3: GitHub Actions Auto-Deploy
 
-1. Fork this repository
-2. Go to Settings → Secrets and variables → Actions
-3. Add required secrets:
-   - `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (for frontend)
-   - `RAILWAY_TOKEN` (for backend)
-   - `BLOCKFROST_API_KEY`
-   - `NEXT_PUBLIC_API_URL` (your backend URL)
-
-4. Push to main branch:
-```bash
-git add .
-git commit -m "Initial deployment"
-git push origin main
-```
-
-GitHub Actions will automatically:
-- Run tests
-- Build Docker images
-- Deploy to production
+With GitHub Actions, you can automatically deploy to your preferred platform (Vercel, Netlify, Railway, Render, etc.).
 
 ---
 
@@ -129,13 +158,15 @@ docker-compose down
 
 ## 📊 Platform Comparison
 
-| Platform | Frontend | Backend | Cost | Setup Time |
-|----------|----------|---------|------|------------|
-| Vercel + Railway | ✅ | ✅ | Free tier | 5 min |
-| Netlify + Render | ✅ | ✅ | Free tier | 5 min |
-| Docker on VPS | ✅ | ✅ | $5/mo | 10 min |
-| AWS/GCP/Azure | ✅ | ✅ | Variable | 30 min |
-| GitHub Pages + Railway | ✅ | ✅ | Mostly free | 10 min |
+| Platform | Frontend | Backend | Cost | Setup Time | Ease |
+|----------|----------|---------|------|------------|------|
+| Vercel + Railway | ✅ | ✅ | Free tier | 5 min | ⭐⭐⭐⭐⭐ |
+| Vercel + Render | ✅ | ✅ | Free tier | 5 min | ⭐⭐⭐⭐⭐ |
+| Vercel + Fly.io | ✅ | ✅ | Free tier | 5 min | ⭐⭐⭐⭐ |
+| Netlify + Render | ✅ | ✅ | Free tier | 5 min | ⭐⭐⭐⭐ |
+| Docker on VPS | ✅ | ✅ | $5/mo | 10 min | ⭐⭐⭐ |
+| Google Cloud Run | ✅ | ✅ | Free tier | 15 min | ⭐⭐⭐ |
+| AWS/GCP/Azure | ✅ | ✅ | Variable | 30 min | ⭐⭐ |
 
 ---
 

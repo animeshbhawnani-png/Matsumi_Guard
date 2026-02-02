@@ -1,0 +1,52 @@
+apiVersion: run.cnpkg.goog/v1
+kind: Service
+metadata:
+  name: cardano-backend
+  labels:
+    app: cardano
+
+spec:
+  template:
+    metadata:
+      labels:
+        app: cardano
+    spec:
+      containers:
+      - image: gcr.io/PROJECT_ID/cardano-backend
+        ports:
+        - containerPort: 8000
+          name: http1
+        resources:
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+        env:
+        - name: BLOCKFROST_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blockfrost-key
+              key: api-key
+        - name: PORT
+          value: "8000"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      serviceAccountName: cardano-sa
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cardano-sa
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: blockfrost-key
+type: Opaque
+stringData:
+  api-key: YOUR_BLOCKFROST_API_KEY_HERE
