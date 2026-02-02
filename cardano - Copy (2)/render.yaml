@@ -1,0 +1,34 @@
+services:
+  # Backend API Service
+  - type: web
+    name: cardano-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: BLOCKFROST_API_KEY
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+
+  # Frontend Service
+  - type: web
+    name: cardano-frontend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: cd frontend && npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: cardano-backend
+          property: host
