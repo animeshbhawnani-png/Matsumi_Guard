@@ -90,7 +90,7 @@ jobs:
           pip install -r requirements.txt
       
       - name: Deploy to Railway (Backend)
-        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        if: secrets.RAILWAY_TOKEN
         run: |
           npm install -g @railway/cli
           railway up --service backend
@@ -125,7 +125,7 @@ jobs:
           NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
       
       - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        if: secrets.VERCEL_TOKEN
         working-directory: ./frontend
         run: |
           npm install -g vercel
