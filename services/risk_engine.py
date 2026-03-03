@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Tuple
 
-from schemas.responses import AnalyzeTransactionResponse
+from schemas.responses import AnalyzeTransactionResponse, AnalyzeWalletResponse
 from services.blockfrost_client import BlockfrostClient
 
 
@@ -200,13 +200,13 @@ async def _fetch_onchain_context(
         amount_category = hash_int_amount % 10
         
         if amount_category < 2:  # 20% - Small amounts
-            mock_amount = str((hash_int % 9000000) + 100000)
+            mock_amount = str((hash_int_amount % 9000000) + 100000)
         elif amount_category < 5:  # 30% - Medium amounts
-            mock_amount = str((hash_int % 90000000) + 10000000)
+            mock_amount = str((hash_int_amount % 90000000) + 10000000)
         elif amount_category < 8:  # 30% - Large amounts
-            mock_amount = str((hash_int % 900000000) + 100000000)
+            mock_amount = str((hash_int_amount % 900000000) + 100000000)
         else:  # 20% - Very large amounts
-            mock_amount = str((hash_int % 4000000000) + 1000000000)
+            mock_amount = str((hash_int_amount % 4000000000) + 1000000000)
         
         # Generate varied transaction history
         tx_category = hash_int_tx % 10
@@ -301,6 +301,34 @@ async def analyze_transaction(
 
     return AnalyzeTransactionResponse(
         txHash=tx_hash,
+        complianceScore=score,
+        riskLevel=risk_level,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+async def analyze_wallet(
+    wallet_address: str,
+    metadata: Dict[str, Any],
+) -> AnalyzeWalletResponse:
+    issues: List[str] = []
+
+    _, _, addr_txs = await _fetch_onchain_context(tx_hash="wallet-summary", wallet_address=wallet_address)
+
+    score = _base_score()
+    score = _analyze_address_activity(score, addr_txs, issues)
+
+    if not metadata.get("kycVerified", False):
+        issues.append("Wallet not KYC verified")
+        score = _apply_penalty(score, 10)
+
+    score = max(0, min(score, 100))
+    risk_level = _categorize_risk(score)
+    recommendations = _derive_recommendations(issues)
+
+    return AnalyzeWalletResponse(
+        walletAddress=wallet_address,
         complianceScore=score,
         riskLevel=risk_level,
         issues=issues,

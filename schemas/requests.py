@@ -11,3 +11,10 @@ class AnalyzeTransactionRequest(BaseModel):
     )
 
 
+class AnalyzeWalletRequest(BaseModel):
+    walletAddress: str = Field(..., description="Cardano wallet address of interest")
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None, description="Optional wallet metadata (off-chain / app-level)"
+    )
+
+

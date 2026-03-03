@@ -35,12 +35,10 @@ jobs:
           pip install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        continue-on-error: true
       
       - name: Test API endpoints
         run: |
-          python -m pytest tests/ -v || echo "No tests found, skipping..."
-        continue-on-error: true
+          python -m pytest tests/ -v
 
   test-frontend:
     name: Test Frontend
@@ -64,15 +62,16 @@ jobs:
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
       
       - name: Run linting
         working-directory: ./frontend
         run: npm run lint
-        continue-on-error: true
 
   deploy-backend:
     name: Deploy Backend
-    needs: [test-backend]
+    needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
@@ -90,25 +89,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      # Deploy to your chosen platform (Railway, Render, Heroku, etc.)
-      # Example for Railway:
       - name: Deploy to Railway (Backend)
-        if: ${{ secrets.RAILWAY_TOKEN }}
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
         run: |
           npm install -g @railway/cli
           railway up --service backend
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      
-      # Example for Render:
-      # - name: Trigger Render Deploy
-      #   if: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
-      #   run: |
-      #     curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
 
   deploy-frontend:
     name: Deploy Frontend
-    needs: [test-frontend]
+    needs: [deploy-backend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
@@ -131,11 +122,10 @@ jobs:
         working-directory: ./frontend
         run: npm run build
         env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
       
-      # Deploy to Vercel
       - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN }}
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
         working-directory: ./frontend
         run: |
           npm install -g vercel
@@ -143,56 +133,3 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      
-      # Alternative: Deploy to Netlify
-      # - name: Deploy to Netlify
-      #   if: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      #   working-directory: ./frontend
-      #   run: |
-      #     npm install -g netlify-cli
-      #     netlify deploy --prod --dir=.next
-      #   env:
-      #     NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      #     NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-
-  deploy-docker:
-    name: Build and Push Docker Images
-    needs: [test-backend, test-frontend]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKER_USERNAME && secrets.DOCKER_PASSWORD }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Build and push backend image
-        if: ${{ secrets.DOCKER_USERNAME }}
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/cardano-backend:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cardano-backend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cardano-backend:buildcache,mode=max
-      
-      - name: Build and push frontend image
-        if: ${{ secrets.DOCKER_USERNAME }}
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/cardano-frontend:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cardano-frontend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cardano-frontend:buildcache,mode=max
