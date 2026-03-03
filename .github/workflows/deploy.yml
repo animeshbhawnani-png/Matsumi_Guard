@@ -99,15 +99,17 @@ jobs:
         run: |
           npm install -g @railway/cli
           args="--ci"
+          service_name="$RAILWAY_SERVICE"
+          if [ -z "$service_name" ]; then
+            service_name="web"
+          fi
           if [ -n "$RAILWAY_PROJECT_ID" ]; then
             args="$args --project $RAILWAY_PROJECT_ID"
           fi
           if [ -n "$RAILWAY_ENVIRONMENT" ]; then
             args="$args --environment $RAILWAY_ENVIRONMENT"
           fi
-          if [ -n "$RAILWAY_SERVICE" ]; then
-            args="$args --service $RAILWAY_SERVICE"
-          fi
+          args="$args --service $service_name"
           railway up $args
 
   deploy-frontend:
