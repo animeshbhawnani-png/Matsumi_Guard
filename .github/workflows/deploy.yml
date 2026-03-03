@@ -71,7 +71,7 @@ jobs:
 
   deploy-backend:
     name: Deploy Backend
-    needs: [test-backend, test-frontend]
+    needs: [ test-backend, test-frontend ]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
