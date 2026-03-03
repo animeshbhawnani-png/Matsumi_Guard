@@ -145,7 +145,6 @@ jobs:
       
       - name: Deploy to Vercel
         if: env.VERCEL_TOKEN != ''
-        working-directory: ./frontend
         run: |
           npm install -g vercel
           vercel --prod --token=$VERCEL_TOKEN
