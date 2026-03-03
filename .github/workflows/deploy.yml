@@ -76,6 +76,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
     
     steps:
       - name: Checkout code
@@ -95,7 +96,11 @@ jobs:
         if: env.RAILWAY_TOKEN != ''
         run: |
           npm install -g @railway/cli
-          railway up --service backend
+          if [ -n "$RAILWAY_SERVICE" ]; then
+            railway up --service "$RAILWAY_SERVICE"
+          else
+            railway up
+          fi
 
   deploy-frontend:
     name: Deploy Frontend
