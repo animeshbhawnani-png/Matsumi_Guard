@@ -3,7 +3,9 @@ import axios from "axios";
 import { WalletConnector } from "../components/WalletConnector";
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://web-production-2ef7.up.railway.app/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://web-production-2ef7.up.railway.app/api";
 
 export default function Home() {
   // Core analysis state
@@ -189,7 +191,7 @@ export default function Home() {
       setConsecutiveSuccesses(0); // Reset streak on error
       let errorMsg = "Failed to analyze transaction. ";
       if (e.code === "ECONNREFUSED" || e.message?.includes("Network Error")) {
-        errorMsg += "Backend not reachable. Is it running on http://localhost:8000?";
+        errorMsg += `Backend not reachable at ${API_BASE}. Check backend status and CORS settings.`;
       } else if (e.response?.data?.detail) {
         errorMsg = e.response.data.detail;
       } else if (e.message) {
