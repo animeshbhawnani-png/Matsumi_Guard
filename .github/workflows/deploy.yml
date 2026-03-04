@@ -146,5 +146,5 @@ jobs:
       - name: Deploy to Vercel
         if: env.VERCEL_TOKEN != ''
         run: |
-          npm install -g vercel
+          npm install -g vercel@50.26.1
           vercel --prod --token=$VERCEL_TOKEN
