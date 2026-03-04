@@ -9,6 +9,7 @@ export function WalletConnector({ onConnected }) {
   const [availableWallets, setAvailableWallets] = useState([]);
   const [connecting, setConnecting] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState(null);
+  const [connectionError, setConnectionError] = useState(null);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.cardano) return;
@@ -19,6 +20,7 @@ export function WalletConnector({ onConnected }) {
   const connect = async walletKey => {
     if (typeof window === "undefined" || !window.cardano?.[walletKey]) return;
     setConnecting(true);
+    setConnectionError(null);
     try {
       const api = await window.cardano[walletKey].enable();
       setConnectedWallet(walletKey);
@@ -27,7 +29,12 @@ export function WalletConnector({ onConnected }) {
       }
     } catch (e) {
       console.error("Wallet connect error", e);
-      alert("Failed to connect wallet. Check extension permissions.");
+      const errorText = String(e?.info || e?.message || e || "").toLowerCase();
+      if (walletKey === "eternl" && errorText.includes("dapp account")) {
+        setConnectionError("Eternl needs a dApp account selected first. Open Eternl, switch to full app, then create/select a dApp account and retry.");
+      } else {
+        setConnectionError("Failed to connect wallet. Check extension permissions and wallet state (unlocked/account selected).");
+      }
     } finally {
       setConnecting(false);
     }
@@ -120,6 +127,22 @@ export function WalletConnector({ onConnected }) {
           {connecting ? "Connecting..." : `Connect ${w.label}`}
         </button>
       ))}
+      {connectionError && (
+        <div
+          style={{
+            width: "100%",
+            marginTop: "4px",
+            padding: "8px 10px",
+            borderRadius: "8px",
+            fontSize: "0.72rem",
+            background: "rgba(127, 29, 29, 0.25)",
+            border: "1px solid rgba(248, 113, 113, 0.45)",
+            color: "#fecaca"
+          }}
+        >
+          {connectionError}
+        </div>
+      )}
     </div>
   );
 }
