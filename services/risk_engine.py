@@ -13,8 +13,8 @@ def _categorize_risk(score: int) -> str:
 
 
 def _base_score() -> int:
-    # Start from a neutral baseline and adjust with heuristics.
-    return 80
+    # Compliance score starts at 100 and is reduced by capped risk factors.
+    return 100
 
 
 def _apply_penalty(score: int, amount: int) -> int:
@@ -23,6 +23,116 @@ def _apply_penalty(score: int, amount: int) -> int:
 
 def _apply_bonus(score: int, amount: int) -> int:
     return min(100, score + amount)
+
+
+RISK_BUCKET_CAPS: Dict[str, int] = {
+    "amount": 20,
+    "activity": 25,
+    "token": 15,
+    "compliance": 20,
+    "counterparty": 20,
+}
+
+
+def _init_risk_breakdown() -> Dict[str, int]:
+    return {
+        "amount": 0,
+        "activity": 0,
+        "token": 0,
+        "compliance": 0,
+        "counterparty": 0,
+    }
+
+
+def _add_risk_points(breakdown: Dict[str, int], bucket: str, points: int) -> int:
+    if points <= 0:
+        return 0
+    cap = RISK_BUCKET_CAPS.get(bucket, 100)
+    current = breakdown.get(bucket, 0)
+    applied = min(points, max(0, cap - current))
+    breakdown[bucket] = current + applied
+    return applied
+
+
+def _amount_risk_points(amount_lovelace: int, issues: List[str]) -> int:
+    # 1 ADA = 1_000_000 lovelace
+    ada_amount = amount_lovelace / 1_000_000
+
+    if ada_amount >= 10_000:
+        issues.append("Extremely large transfer amount")
+        return 20
+    if ada_amount >= 2_000:
+        issues.append("Very large transfer amount")
+        return 14
+    if ada_amount >= 500:
+        issues.append("Large transfer amount")
+        return 8
+    if ada_amount >= 100:
+        issues.append("Moderately large transfer amount")
+        return 4
+    return 0
+
+
+def _token_risk_points(assets: List[Dict[str, Any]], issues: List[str]) -> int:
+    if not assets:
+        return 0
+
+    points = 0
+    suspicious_assets = []
+    for asset in assets:
+        policy_id = asset.get("policy_id") or asset.get("unit", "")[:56]
+        asset_name = asset.get("asset_name") or asset.get("unit", "")[56:]
+        if len(str(asset_name)) > 32:
+            suspicious_assets.append(f"{policy_id}.{asset_name}")
+
+    if len(assets) > 50:
+        issues.append("Transaction transfers a very high number of distinct tokens")
+        points += 10
+    elif len(assets) > 10:
+        issues.append("Transaction transfers many distinct tokens")
+        points += 6
+
+    if suspicious_assets:
+        issues.append("Suspicious or obfuscated token names detected")
+        points += 6
+
+    return points
+
+
+def _activity_risk_points(tx_history: List[Dict[str, Any]], issues: List[str]) -> int:
+    tx_count = len(tx_history)
+    if tx_count == 0:
+        issues.append("New or inactive wallet address")
+        return 18
+    if tx_count < 3:
+        issues.append("Very low activity wallet")
+        return 12
+    if tx_count < 10:
+        issues.append("Low activity wallet")
+        return 6
+    if tx_count > 500:
+        issues.append("High frequency transaction pattern")
+        return 10
+    return 0
+
+
+def _compliance_risk_points(metadata: Dict[str, Any], issues: List[str]) -> int:
+    # Penalize explicit negative evidence. Missing metadata carries no hard penalty.
+    if "kycVerified" in metadata and metadata.get("kycVerified") is False:
+        issues.append("Wallet not KYC verified")
+        return 10
+    return 0
+
+
+def _counterparty_risk_points(metadata: Dict[str, Any], issues: List[str]) -> int:
+    points = 0
+    if metadata.get("sanctionsHit") is True:
+        issues.append("Potential sanctions exposure detected")
+        points += 20
+    if metadata.get("highRiskCounterparty") is True:
+        issues.append("Interacts with high-risk counterparty")
+        points += 12
+    return points
 
 
 def _analyze_amount(score: int, amount_lovelace: int, issues: List[str]) -> int:
@@ -260,6 +370,7 @@ async def analyze_transaction(
         print(f"[DEBUG] Amount: {total_lovelace / 1_000_000:.2f} ADA | Tx count: {len(addr_txs)}")
 
     score = _base_score()
+    risk_breakdown = _init_risk_breakdown()
 
     # --- Amount analysis ---
     # For simplicity, we use `output_amount` from tx_info where available.
@@ -270,7 +381,7 @@ async def analyze_transaction(
         if item.get("unit") == "lovelace":
             total_lovelace += int(item.get("quantity", 0))
 
-    score = _analyze_amount(score, total_lovelace, issues)
+    _add_risk_points(risk_breakdown, "amount", _amount_risk_points(total_lovelace, issues))
 
     # --- Token / asset analysis ---
     assets: List[Dict[str, Any]] = []
@@ -279,15 +390,17 @@ async def analyze_transaction(
             if amt.get("unit") != "lovelace":
                 assets.append(amt)
 
-    score = _analyze_tokens(score, assets, issues)
+    _add_risk_points(risk_breakdown, "token", _token_risk_points(assets, issues))
 
     # --- Address frequency / pattern analysis ---
-    score = _analyze_address_activity(score, addr_txs, issues)
+    _add_risk_points(risk_breakdown, "activity", _activity_risk_points(addr_txs, issues))
 
-    # --- Example: basic KYC flag via metadata (off-chain) ---
-    if not metadata.get("kycVerified", False):
-        issues.append("Wallet not KYC verified")
-        score = _apply_penalty(score, 10)
+    # --- Off-chain compliance / counterparty flags ---
+    _add_risk_points(risk_breakdown, "compliance", _compliance_risk_points(metadata, issues))
+    _add_risk_points(risk_breakdown, "counterparty", _counterparty_risk_points(metadata, issues))
+
+    total_risk = sum(risk_breakdown.values())
+    score = _base_score() - total_risk
 
     # Cap and floor score
     score = max(0, min(score, 100))
@@ -297,7 +410,7 @@ async def analyze_transaction(
     # Debug logging
     import os
     if not os.getenv("BLOCKFROST_PROJECT_ID"):
-        print(f"[DEBUG] Final score: {score} | Risk: {risk_level} | Issues: {len(issues)}")
+        print(f"[DEBUG] Total risk: {total_risk} | Final score: {score} | Risk: {risk_level} | Issues: {len(issues)}")
 
     return AnalyzeTransactionResponse(
         txHash=tx_hash,
@@ -305,6 +418,7 @@ async def analyze_transaction(
         riskLevel=risk_level,
         issues=issues,
         recommendations=recommendations,
+        riskBreakdown=risk_breakdown,
     )
 
 
@@ -317,11 +431,13 @@ async def analyze_wallet(
     _, _, addr_txs = await _fetch_onchain_context(tx_hash="wallet-summary", wallet_address=wallet_address)
 
     score = _base_score()
-    score = _analyze_address_activity(score, addr_txs, issues)
+    risk_breakdown = _init_risk_breakdown()
+    _add_risk_points(risk_breakdown, "activity", _activity_risk_points(addr_txs, issues))
+    _add_risk_points(risk_breakdown, "compliance", _compliance_risk_points(metadata, issues))
+    _add_risk_points(risk_breakdown, "counterparty", _counterparty_risk_points(metadata, issues))
 
-    if not metadata.get("kycVerified", False):
-        issues.append("Wallet not KYC verified")
-        score = _apply_penalty(score, 10)
+    total_risk = sum(risk_breakdown.values())
+    score = _base_score() - total_risk
 
     score = max(0, min(score, 100))
     risk_level = _categorize_risk(score)
@@ -333,6 +449,7 @@ async def analyze_wallet(
         riskLevel=risk_level,
         issues=issues,
         recommendations=recommendations,
+        riskBreakdown=risk_breakdown,
     )
 
 
